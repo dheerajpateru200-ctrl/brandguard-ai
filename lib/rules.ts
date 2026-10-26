@@ -22,10 +22,11 @@ export function runRules(content: string, terms: Term[], facts: Fact[]): Finding
   const findings: Finding[] = [];
   const lower = content.toLowerCase();
   const today = new Date().toISOString().slice(0, 10);
-
-  for (const t of terms) {
-    const idx = lower.indexOf(t.term.toLowerCase());
-    if (idx !== -1) {
+   for (const t of terms) {
+     const escaped = t.term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+     const m = new RegExp("(?<![a-z0-9])" + escaped + "(?![a-z0-9])").exec(lower);
+     const idx = m ? m.index : -1;
+     if (idx !== -1) {
       findings.push({
         quote: content.slice(idx, idx + t.term.length),
         issue: "Banned term",
