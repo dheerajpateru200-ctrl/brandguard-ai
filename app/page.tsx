@@ -105,7 +105,7 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-6xl p-6">
       <header className="mb-6 flex items-center justify-between border-b pb-4">
-        <h1 className="text-2xl font-bold">BrandGuard AI</h1>
+        <div className="flex items-center gap-4"><h1 className="text-2xl font-bold">BrandGuard AI</h1><a href="/history" className="text-sm underline">History</a></div>
         <label className="text-sm">
           Role:{" "}
           <select
@@ -241,3 +241,4 @@ export default function Home() {
     </main>
   );
 }
+
