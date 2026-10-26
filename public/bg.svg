@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F9FB"/>
+      <stop offset="1" stop-color="#DCE5ED"/>
+    </linearGradient>
+    <pattern id="rule" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M0 39.5H40" stroke="#C9D3DD" stroke-width="1" fill="none"/>
+    </pattern>
+    <g id="sheet">
+      <rect width="360" height="460" rx="6" fill="#FFFFFF" stroke="#D5DBE2"/>
+      <rect x="32" y="40" width="200" height="12" rx="3" fill="#172230" opacity="0.18"/>
+      <rect x="32" y="150" width="130" height="18" rx="3" fill="#F9E5BC"/>
+      <rect x="32" y="198" width="110" height="18" rx="3" fill="#FADBD8"/>
+      <rect x="100" y="246" width="120" height="18" rx="3" fill="#D5E6F7"/>
+      <rect x="32" y="84" width="296" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="108" width="270" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="132" width="296" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="156" width="240" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="180" width="290" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="204" width="180" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="228" width="296" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="252" width="250" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="276" width="296" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="300" width="210" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="324" width="280" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <rect x="32" y="348" width="160" height="8" rx="3" fill="#566372" opacity="0.22"/>
+      <circle cx="176" cy="159" r="9" fill="#A15C07" opacity="0.8"/>
+      <circle cx="156" cy="207" r="9" fill="#B42318" opacity="0.8"/>
+      <circle cx="234" cy="255" r="9" fill="#1D5FA3" opacity="0.8"/>
+    </g>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <rect width="1600" height="1000" fill="url(#rule)" opacity="0.45"/>
+  <use xlink:href="#sheet" transform="translate(1180 -60) rotate(8)" opacity="0.75"/>
+  <use xlink:href="#sheet" transform="translate(-90 560) rotate(-7)" opacity="0.75"/>
+  <use xlink:href="#sheet" transform="translate(1340 640) rotate(-4) scale(0.8)" opacity="0.5"/>
+</svg>

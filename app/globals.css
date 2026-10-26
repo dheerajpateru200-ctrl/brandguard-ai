@@ -1,9 +1,20 @@
 @import "tailwindcss";
 
 body {
-  background: #EEF1F4;
+  min-height: 100vh;
   color: #172230;
   font-family: var(--font-ui), system-ui, sans-serif;
+  background-color: #EEF1F4;
+  background-image: url("/bg.svg");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+@media (min-width: 1024px) {
+  body {
+    background-attachment: fixed;
+  }
 }
 
 .font-doc {
