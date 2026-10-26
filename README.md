@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BrandGuard AI
 
-## Getting Started
+A pre-publication safety net that checks marketing content against approved brand rules and facts. Automation detects, evidence explains, humans decide.
 
-First, run the development server:
+- Live demo: https://brandguard-ai-liard.vercel.app
+- Repository: https://github.com/dheerajpateru200-ctrl/brandguard-ai
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## What it does
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. A creator pastes content and runs a review.
+2. The rules engine checks it against banned terms, the approved-fact registry and expiry dates.
+3. Each finding shows the exact text, the reason, the cited source, severity, confidence and a suggested fix.
+4. A reviewer approves, requests changes or escalates, with a comment.
+5. Every action is saved to an audit trail, visible on the History page.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js (App Router), TypeScript, Tailwind CSS
+- Next.js API routes as the backend
+- Supabase (PostgreSQL) with Row Level Security enabled
+- Deployed on Vercel
 
-## Learn More
+## Run locally
 
-To learn more about Next.js, take a look at the following resources:
+1. `npm install`
+2. Create `.env.local` with:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_KEY`
+3. Create the tables and seed data in the Supabase SQL editor.
+4. `npm run dev`, then open http://localhost:3000
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Limitations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Rules only match known terms and numbers, so reworded claims are missed.
+- Login is a role switcher (Creator / Reviewer), not real authentication.
+- Text input only.
+- The brand kit is synthetic (a fictional skincare brand).
