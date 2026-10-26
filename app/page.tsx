@@ -1,5 +1,6 @@
+
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Severity = "high" | "medium" | "low";
 type Finding = {
@@ -15,6 +16,7 @@ type Finding = {
 type Review = { id: string; title: string; content: string; status: string; findings: Finding[] };
 type Part = { text: string; sev?: Severity; idx?: number };
 type SevStyle = { label: string; mark: string; bar: string; edge: string; chip: string };
+type Session = { token: string; email: string; role: string };
 
 const SEV: Record<Severity, SevStyle> = {
   high: {
@@ -106,7 +108,14 @@ function buildParts(content: string, findings: Finding[]) {
 }
 
 export default function Home() {
-  const [role, setRole] = useState("creator");
+  const [session, setSession] = useState<Session | null>(null);
+  const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
   const [title, setTitle] = useState(SAMPLES[0].title);
   const [content, setContent] = useState(SAMPLES[0].text);
   const [review, setReview] = useState<Review | null>(null);
@@ -118,7 +127,85 @@ export default function Home() {
   const [editing, setEditing] = useState(false);
   const [active, setActive] = useState<number | null>(null);
 
+  useEffect(() => {
+    let token = "";
+    try {
+      const raw = localStorage.getItem("bg_session");
+      if (raw) token = JSON.parse(raw).token || "";
+    } catch {
+      token = "";
+    }
+    if (!token) {
+      setReady(true);
+      return;
+    }
+    fetch("/api/auth/me", { headers: { Authorization: "Bearer " + token } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setSession({ token, email: d.email, role: d.role });
+        } else {
+          try {
+            localStorage.removeItem("bg_session");
+          } catch {}
+        }
+        setReady(true);
+      })
+      .catch(() => setReady(true));
+  }, []);
+
+  function clearWork() {
+    setReview(null);
+    setEditing(false);
+    setStale(false);
+    setActive(null);
+    setError("");
+    setNotice("");
+    setComment("");
+  }
+
+  async function submitAuth() {
+    setAuthError("");
+    setAuthBusy(true);
+    try {
+      const res = await fetch(mode === "login" ? "/api/auth/login" : "/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authEmail, password: authPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not sign in");
+      const s: Session = { token: data.access_token, email: data.email, role: data.role };
+      setSession(s);
+      try {
+        localStorage.setItem("bg_session", JSON.stringify(s));
+      } catch {}
+      setAuthPassword("");
+      clearWork();
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : "Could not sign in");
+    }
+    setAuthBusy(false);
+  }
+
+  function logout(message?: string) {
+    setSession(null);
+    try {
+      localStorage.removeItem("bg_session");
+    } catch {}
+    clearWork();
+    setAuthError(message || "");
+  }
+
+  function authHeaders() {
+    return {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + (session ? session.token : ""),
+    };
+  }
+
   async function runReview() {
+    if (!session) return;
     if (!content.trim()) {
       setError("Paste some content first.");
       return;
@@ -129,9 +216,14 @@ export default function Home() {
     try {
       const res = await fetch("/api/review", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, actor: role }),
+        headers: authHeaders(),
+        body: JSON.stringify({ title, content, actor: session.email }),
       });
+      if (res.status === 401) {
+        logout("Your session expired. Log in again.");
+        setLoading(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Review failed");
       setReview(data);
@@ -146,13 +238,17 @@ export default function Home() {
   }
 
   async function decide(decision: string) {
-    if (!review) return;
+    if (!review || !session) return;
     setError("");
     const res = await fetch("/api/review/decide", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: review.id, decision, comment, actor: "reviewer" }),
+      headers: authHeaders(),
+      body: JSON.stringify({ id: review.id, decision, comment, actor: session.email }),
     });
+    if (res.status === 401) {
+      logout("Your session expired. Log in again.");
+      return;
+    }
     const data = await res.json();
     if (!res.ok) {
       setError(data.error || "Could not save decision");
@@ -185,14 +281,10 @@ export default function Home() {
   function loadSample(s: (typeof SAMPLES)[number]) {
     setTitle(s.title);
     setContent(s.text);
-    setReview(null);
-    setEditing(false);
-    setStale(false);
-    setActive(null);
-    setError("");
-    setNotice("");
+    clearWork();
   }
 
+  const role = session ? session.role : "creator";
   const findings = review ? review.findings ?? [] : [];
   const showProof = review !== null && !editing;
   const built = review ? buildParts(review.content, findings) : { parts: [], located: new Set<number>() };
@@ -205,6 +297,114 @@ export default function Home() {
       ? "No issues found"
       : findings.length + (findings.length === 1 ? " issue" : " issues") + " to resolve before publishing";
 
+  if (!ready) {
+    return <div className="min-h-screen" />;
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen">
+        <header className="border-b border-[#D5DBE2] bg-white">
+          <div className="mx-auto flex max-w-6xl items-baseline gap-3 px-4 py-3 md:px-6">
+            <span className="font-doc text-2xl font-semibold tracking-tight">BrandGuard</span>
+            <span className="hidden text-sm text-[#566372] sm:inline">
+              Brand governance for AI-era content
+            </span>
+          </div>
+        </header>
+        <main className="mx-auto max-w-md px-4 py-12">
+          <h1 className="font-doc text-3xl font-semibold tracking-tight">
+            {mode === "login" ? "Log in to BrandGuard" : "Create your account"}
+          </h1>
+          <p className="mt-1 text-[#566372]">Automation detects. Evidence explains. Humans decide.</p>
+
+          <div className="mt-6 rounded-lg border border-[#D5DBE2] bg-white p-5">
+            <div
+              role="group"
+              aria-label="Account action"
+              className="mb-4 flex rounded-md border border-[#D5DBE2] bg-[#EEF1F4] p-0.5"
+            >
+              {(["login", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  onClick={() => {
+                    setMode(m);
+                    setAuthError("");
+                  }}
+                  className={
+                    "flex-1 rounded px-3 py-1 text-sm font-medium " +
+                    (mode === m ? "bg-[#1B3A57] text-white" : "text-[#2B3A49] hover:bg-white")
+                  }
+                >
+                  {m === "login" ? "Log in" : "Create account"}
+                </button>
+              ))}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitAuth();
+              }}
+            >
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                className="mb-3 mt-1 w-full rounded-md border border-[#D5DBE2] p-2"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+              />
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                className="mt-1 w-full rounded-md border border-[#D5DBE2] p-2"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+              {mode === "signup" && (
+                <p className="mt-1 text-xs text-[#566372]">Use at least 8 characters.</p>
+              )}
+              {authError && (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-md border border-[#F1B5AE] bg-[#FDECEA] p-2 text-sm text-[#8A1C13]"
+                >
+                  {authError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={authBusy}
+                className="mt-4 w-full rounded-md bg-[#1B3A57] px-4 py-2 text-sm font-semibold text-white hover:bg-[#142C43] disabled:opacity-60"
+              >
+                {authBusy ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
+              </button>
+            </form>
+
+            {mode === "signup" && (
+              <p className="mt-3 text-xs text-[#566372]">
+                New accounts start as Creators. An administrator grants Reviewer access.
+              </p>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-[#D5DBE2] bg-white">
@@ -215,29 +415,30 @@ export default function Home() {
               Brand governance for AI-era content
             </span>
           </div>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex flex-wrap items-center gap-3 text-sm">
+            {role === "reviewer" && (
+            <a href="/queue" className="font-medium underline-offset-4 hover:underline">
+            Review queue
+            </a>
+)}
             <a href="/history" className="font-medium underline-offset-4 hover:underline">
               Review history
             </a>
-            <div
-              role="group"
-              aria-label="Role"
-              className="flex rounded-md border border-[#D5DBE2] bg-[#EEF1F4] p-0.5"
+            <span className="hidden text-[#566372] md:inline">{session.email}</span>
+            <span
+              className={
+                "rounded px-2 py-0.5 text-xs font-medium " +
+                (role === "reviewer" ? "bg-[#DDF0E5] text-[#17553A]" : "bg-[#E4E9EE] text-[#2B3A49]")
+              }
             >
-              {["creator", "reviewer"].map((r) => (
-                <button
-                  key={r}
-                  aria-pressed={role === r}
-                  onClick={() => setRole(r)}
-                  className={
-                    "rounded px-3 py-1 text-sm font-medium transition-colors " +
-                    (role === r ? "bg-[#1B3A57] text-white" : "text-[#2B3A49] hover:bg-white")
-                  }
-                >
-                  {r === "creator" ? "Creator" : "Reviewer"}
-                </button>
-              ))}
-            </div>
+              {role === "reviewer" ? "Reviewer" : "Creator"}
+            </span>
+            <button
+              onClick={() => logout()}
+              className="rounded-md border border-[#D5DBE2] px-3 py-1 font-medium hover:bg-[#EEF1F4]"
+            >
+              Log out
+            </button>
           </nav>
         </div>
       </header>
@@ -486,9 +687,10 @@ export default function Home() {
                     </p>
                   )}
 
-                  {role === "creator" && !decided && !stale && (
+                  {role !== "reviewer" && !decided && !stale && (
                     <p className="mt-3 text-sm text-[#566372]">
-                      Switch to Reviewer to approve, request changes or escalate.
+                      You are logged in as a Creator. Only a Reviewer can approve, request changes or
+                      escalate.
                     </p>
                   )}
 

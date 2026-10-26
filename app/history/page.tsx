@@ -39,7 +39,11 @@ export default function History() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/reviews")
+    let token = "";
+    try {
+      token = JSON.parse(localStorage.getItem("bg_session") || "{}").token || "";
+    } catch {}
+    fetch("/api/reviews", { headers: { Authorization: "Bearer " + token } })
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(d.error);
