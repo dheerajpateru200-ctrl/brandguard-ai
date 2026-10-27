@@ -8,15 +8,11 @@ export async function GET(req: Request) {
   }
 
   const db = adminClient();
-  let q = db
-    .from("reviews")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  let base = db.from("reviews").select("*");
   if (user.role !== "reviewer") {
-    q = q.eq("created_by", user.email);
+    base = base.eq("created_by", user.email);
   }
-  const reviews = await q;
+  const reviews = await base.order("created_at", { ascending: false }).limit(50);
   if (reviews.error) {
     return NextResponse.json({ error: reviews.error.message }, { status: 500 });
   }

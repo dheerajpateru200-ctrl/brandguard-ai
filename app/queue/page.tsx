@@ -35,7 +35,7 @@ function getToken() {
 }
 
 function waited(iso: string, now: number) {
-  const mins = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+  const mins = now === 0 ? 0 : Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
   if (mins < 1) return "Just arrived";
   if (mins < 60) return "Waiting " + mins + " min";
   return "Waiting " + Math.floor(mins / 60) + " h " + (mins % 60) + " min";
@@ -48,7 +48,7 @@ export default function Queue() {
   const [notice, setNotice] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [comment, setComment] = useState("");
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
 
   const load = useCallback(async () => {
     const t = getToken();
