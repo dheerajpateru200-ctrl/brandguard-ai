@@ -1,6 +1,6 @@
-
 "use client";
 import { useEffect, useState } from "react";
+import PosterPicker, { type Poster } from "./PosterPicker";
 
 type Severity = "high" | "medium" | "low";
 type Finding = {
@@ -13,7 +13,14 @@ type Finding = {
   suggested_fix: string;
   origin: string;
 };
-type Review = { id: string; title: string; content: string; status: string; findings: Finding[] };
+type Review = {
+  id: string;
+  title: string;
+  content: string;
+  status: string;
+  findings: Finding[];
+  image_url?: string | null;
+};
 type Part = { text: string; sev?: Severity; idx?: number };
 type SevStyle = { label: string; mark: string; bar: string; edge: string; chip: string };
 type Session = { token: string; email: string; role: string };
@@ -78,6 +85,7 @@ const CHECKS = [
   "Numbers that no approved fact supports",
   "Claims that rely on facts which have expired",
   "Reworded claims the rules cannot match, checked by AI",
+  "Text printed on poster images",
 ];
 
 function sevOf(s: string): Severity {
@@ -126,6 +134,7 @@ export default function Home() {
   const [stale, setStale] = useState(false);
   const [editing, setEditing] = useState(false);
   const [active, setActive] = useState<number | null>(null);
+  const [poster, setPoster] = useState<Poster | null>(null);
 
   useEffect(() => {
     let token = "";
@@ -162,6 +171,7 @@ export default function Home() {
     setError("");
     setNotice("");
     setComment("");
+    setPoster(null);
   }
 
   async function submitAuth() {
@@ -206,8 +216,8 @@ export default function Home() {
 
   async function runReview() {
     if (!session) return;
-    if (!content.trim()) {
-      setError("Paste some content first.");
+    if (!content.trim() && !poster) {
+      setError("Paste some content or add a poster first.");
       return;
     }
     setLoading(true);
@@ -217,7 +227,12 @@ export default function Home() {
       const res = await fetch("/api/review", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ title, content, actor: session.email }),
+        body: JSON.stringify({
+          title,
+          content,
+          image: poster ? poster.data : undefined,
+          actor: session.email,
+        }),
       });
       if (res.status === 401) {
         logout("Your session expired. Log in again.");
@@ -227,6 +242,8 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Review failed");
       setReview(data);
+      setPoster(null);
+      if (data.content) setContent(data.content);
       setComment("");
       setStale(false);
       setEditing(false);
@@ -417,10 +434,10 @@ export default function Home() {
           </div>
           <nav className="flex flex-wrap items-center gap-3 text-sm">
             {role === "reviewer" && (
-            <a href="/queue" className="font-medium underline-offset-4 hover:underline">
-            Review queue
-            </a>
-)}
+              <a href="/queue" className="font-medium underline-offset-4 hover:underline">
+                Review queue
+              </a>
+            )}
             <a href="/history" className="font-medium underline-offset-4 hover:underline">
               Review history
             </a>
@@ -477,6 +494,19 @@ export default function Home() {
               </div>
             </div>
 
+            {review && review.image_url && showProof && (
+              <div className="border-b border-[#D5DBE2] px-5 py-4">
+                <img
+                  src={review.image_url}
+                  alt="Poster submitted for review"
+                  className="max-h-72 rounded border border-[#D5DBE2]"
+                />
+                <p className="mt-2 text-xs text-[#566372]">
+                  The text below includes the words read from the poster.
+                </p>
+              </div>
+            )}
+
             {showProof ? (
               <div className="font-doc whitespace-pre-wrap px-5 py-5 text-xl leading-9">
                 {built.parts.map((p, k) =>
@@ -521,6 +551,12 @@ export default function Home() {
                   }}
                 />
               </>
+            )}
+
+            {!showProof && (
+              <div className="border-t border-[#D5DBE2] px-5 py-3">
+                <PosterPicker value={poster} onChange={setPoster} />
+              </div>
             )}
 
             <div className="flex flex-wrap items-center gap-3 border-t border-[#D5DBE2] px-5 py-3">

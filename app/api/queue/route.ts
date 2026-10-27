@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const db = adminClient();
   const q = await db
     .from("reviews")
-    .select("id,title,content,findings,created_by,created_at")
+    .select("id,title,content,findings,created_by,created_at,image_path")
     .eq("status", "awaiting_approval")
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
@@ -21,5 +21,16 @@ export async function GET(req: Request) {
   if (q.error) {
     return NextResponse.json({ error: q.error.message }, { status: 500 });
   }
-  return NextResponse.json({ reviews: q.data });
+
+  const reviews = await Promise.all(
+    (q.data ?? []).map(async (r) => {
+      let image_url: string | null = null;
+      if (r.image_path) {
+        const s = await db.storage.from("posters").createSignedUrl(r.image_path, 3600);
+        image_url = s.data?.signedUrl ?? null;
+      }
+      return { ...r, image_url };
+    })
+  );
+  return NextResponse.json({ reviews });
 }

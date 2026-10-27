@@ -17,6 +17,7 @@ type Item = {
   findings: Finding[];
   created_by: string | null;
   created_at: string;
+  image_url?: string | null;
 };
 
 const CHIP: Record<string, string> = {
@@ -47,7 +48,7 @@ export default function Queue() {
   const [notice, setNotice] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [comment, setComment] = useState("");
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     const t = getToken();
@@ -163,6 +164,7 @@ export default function Queue() {
                     <span className="block text-sm text-[#566372]">
                       From {it.created_by || "unknown"}, {waited(it.created_at, now)},{" "}
                       {it.findings.length} {it.findings.length === 1 ? "finding" : "findings"}
+                      {it.image_url ? ", with poster" : ""}
                     </span>
                   </span>
                   <span className="text-sm font-medium">{isOpen ? "Close" : "Open"}</span>
@@ -170,6 +172,13 @@ export default function Queue() {
 
                 {isOpen && (
                   <div className="border-t border-[#D5DBE2] p-4">
+                    {it.image_url && (
+                      <img
+                        src={it.image_url}
+                        alt="Poster submitted for review"
+                        className="mb-3 max-h-72 rounded border border-[#D5DBE2]"
+                      />
+                    )}
                     <p className="font-doc whitespace-pre-wrap text-lg leading-8">{it.content}</p>
 
                     <div className="mt-4 space-y-2">
