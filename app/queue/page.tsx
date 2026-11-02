@@ -155,12 +155,22 @@ export default function Queue() {
           <span className="font-doc text-2xl font-semibold tracking-tight">
             BrandGuard
           </span>
-          <a
-            href="/"
-            className="text-sm font-medium underline-offset-4 hover:underline"
-          >
-            Back to review
-          </a>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="/reviewer-access"
+              className="inline-flex items-center rounded-xl bg-[#242424] px-5 py-3 text-sm font-medium text-white transition hover:bg-black"
+            >
+              Request Reviewer Access →
+            </a>
+
+            <a
+              href="/"
+              className="text-sm font-medium underline-offset-4 hover:underline"
+            >
+              Back to review
+            </a>
+          </div>
         </div>
       </header>
 

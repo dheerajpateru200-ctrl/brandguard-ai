@@ -1,6 +1,8 @@
 
 import { NextResponse } from "next/server";
 import { adminClient, getUser } from "../../../lib/auth";
+import { writeAudit } from "../../../lib/audit";
+import { checkRateLimit } from "../../../lib/rate-limit";
 import { runRules, type Finding } from "../../../lib/rules";
 import {
   getAiFindings,
@@ -16,6 +18,35 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Not logged in." },
       { status: 401 }
+    );
+  }
+
+  // Rate limit: 10 review submissions per user per minute.
+  try {
+    const allowed = await checkRateLimit({
+      key: `review:${user.id}`,
+      limit: 10,
+      windowSeconds: 60,
+    });
+
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Too many review submissions. Please wait one minute.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        }
+      );
+    }
+  } catch (error) {
+    console.error("Review rate limit error:", error);
+
+    return NextResponse.json(
+      { error: "Review service temporarily unavailable." },
+      { status: 503 }
     );
   }
 
@@ -42,7 +73,10 @@ export async function POST(req: Request) {
   if (imageB64) {
     if (imageB64.length > 2500000) {
       return NextResponse.json(
-        { error: "That image is too large after resizing. Try a smaller one." },
+        {
+          error:
+            "That image is too large after resizing. Try a smaller one.",
+        },
         { status: 413 }
       );
     }
@@ -119,14 +153,20 @@ export async function POST(req: Request) {
 
   const db = adminClient();
 
-  // Load approved brand rules and facts.
+  // Load only active banned terms.
   const terms = await db
     .from("banned_terms")
-    .select("*");
+    .select("*")
+    .eq("is_active", true);
+
+  // Load only active and non-expired approved facts.
+  const today = new Date().toISOString().slice(0, 10);
 
   const facts = await db
     .from("approved_facts")
-    .select("*");
+    .select("*")
+    .eq("is_active", true)
+    .or(`expires_on.is.null,expires_on.gte.${today}`);
 
   if (terms.error || facts.error) {
     return NextResponse.json(
@@ -255,7 +295,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Save review and findings, including visual regions.
+  // Save review and findings.
   const saved = await db
     .from("reviews")
     .insert({
@@ -277,23 +317,23 @@ export async function POST(req: Request) {
     );
   }
 
-  // Record audit event.
-  const audit = await db.from("audit_log").insert({
-    review_id: saved.data.id,
-    action: "submitted",
-    actor,
-    comment:
-      findings.length +
-      " findings (" +
-      aiFindings.length +
-      " AI-suggested, " +
-      visualFindings.length +
-      " visual)" +
-      (imagePath ? ", with poster" : ""),
-  });
-
-  if (audit.error) {
-    console.error("Audit log insert failed:", audit.error);
+  // Record audit event using the shared audit helper.
+  try {
+    await writeAudit({
+      reviewId: saved.data.id,
+      action: "submitted",
+      actor,
+      comment:
+        findings.length +
+        " findings (" +
+        aiFindings.length +
+        " AI-suggested, " +
+        visualFindings.length +
+        " visual)" +
+        (imagePath ? ", with poster" : ""),
+    });
+  } catch (auditError) {
+    console.error("Audit log insert failed:", auditError);
   }
 
   // Generate temporary signed poster URL.

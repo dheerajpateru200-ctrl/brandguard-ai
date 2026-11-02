@@ -1,3 +1,4 @@
+
 "use client";
 import { useEffect, useState } from "react";
 import PosterPicker, { type Poster } from "./PosterPicker";
@@ -438,6 +439,25 @@ export default function Home() {
                 Review queue
               </a>
             )}
+
+            {role === "creator" && (
+              <a
+                href="/reviewer-access"
+                className="rounded-md border border-[#1B3A57] px-3 py-1 font-medium text-[#1B3A57] hover:bg-[#EEF1F4]"
+              >
+                Request Reviewer Access
+              </a>
+            )}
+
+            {role === "admin" && (
+              <a
+                href="/admin"
+                className="font-medium underline-offset-4 hover:underline"
+              >
+                Admin dashboard
+              </a>
+            )}
+
             <a href="/history" className="font-medium underline-offset-4 hover:underline">
               Review history
             </a>
@@ -445,10 +465,14 @@ export default function Home() {
             <span
               className={
                 "rounded px-2 py-0.5 text-xs font-medium " +
-                (role === "reviewer" ? "bg-[#DDF0E5] text-[#17553A]" : "bg-[#E4E9EE] text-[#2B3A49]")
+                (role === "reviewer"
+                  ? "bg-[#DDF0E5] text-[#17553A]"
+                  : role === "admin"
+                    ? "bg-[#E8DDF8] text-[#59318A]"
+                    : "bg-[#E4E9EE] text-[#2B3A49]")
               }
             >
-              {role === "reviewer" ? "Reviewer" : "Creator"}
+              {role === "admin" ? "Admin" : role === "reviewer" ? "Reviewer" : "Creator"}
             </span>
             <button
               onClick={() => logout()}

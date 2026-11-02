@@ -1,41 +1,125 @@
+
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getUser, adminClient } from "../../../../lib/auth";
+import { writeAudit } from "../../../../lib/audit";
 
 const ALLOWED = ["approved", "changes_requested", "escalated"];
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const id = String(body.id || "");
-  const decision = String(body.decision || "");
-  const comment = String(body.comment || "");
-  const actor = String(body.actor || "reviewer");
+  try {
+    const user = await getUser(req);
 
-  if (!id || !ALLOWED.includes(decision)) {
-    return NextResponse.json({ error: "Invalid decision." }, { status: 400 });
-  }
-  if (decision !== "approved" && !comment.trim()) {
+    if (!user || !["reviewer", "admin"].includes(user.role)) {
+      return NextResponse.json(
+        { error: "Reviewer or admin access required." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const id = String(body.id || "");
+    const decision = String(body.decision || "");
+    const comment = String(body.comment || "").trim();
+
+    if (!id || !ALLOWED.includes(decision)) {
+      return NextResponse.json(
+        { error: "Invalid decision." },
+        { status: 400 }
+      );
+    }
+
+    if (decision !== "approved" && !comment) {
+      return NextResponse.json(
+        { error: "Add a comment explaining your decision." },
+        { status: 400 }
+      );
+    }
+
+    const db = adminClient();
+
+    const { data: review, error: reviewError } = await db
+      .from("reviews")
+      .select("id, created_by, status")
+      .eq("id", id)
+      .single();
+
+    if (reviewError || !review) {
+      return NextResponse.json(
+        { error: "Review not found." },
+        { status: 404 }
+      );
+    }
+
+    // created_by stores the creator's email, not their UUID.
+    if (
+      review.created_by &&
+      review.created_by.toLowerCase() === user.email.toLowerCase()
+    ) {
+      return NextResponse.json(
+        { error: "You cannot review or approve your own submission." },
+        { status: 403 }
+      );
+    }
+
+    if (
+      review.status === "approved" ||
+      review.status === "changes_requested" ||
+      review.status === "escalated"
+    ) {
+      return NextResponse.json(
+        { error: "This review already has a decision." },
+        { status: 409 }
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    const { data: updated, error: updateError } = await db
+      .from("reviews")
+      .update({
+        status: decision,
+        decision_comment: comment,
+        decided_by: user.id,
+        decided_at: now,
+      })
+      .eq("id", id)
+      .eq("status", review.status)
+      .select()
+      .single();
+
+    if (updateError || !updated) {
+      return NextResponse.json(
+        { error: "Unable to update review. It may have changed already." },
+        { status: 409 }
+      );
+    }
+
+    try {
+      await writeAudit({
+        reviewId: id,
+        action: decision,
+        actor: user.email,
+        comment,
+      });
+    } catch (auditError) {
+      console.error("Review decision audit failed:", auditError);
+
+      return NextResponse.json(
+        {
+          error: "Decision saved, but audit logging failed. Contact an administrator.",
+          review: updated,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Review decision error:", error);
+
     return NextResponse.json(
-      { error: "Add a comment explaining your decision." },
-      { status: 400 }
+      { error: "Unable to process review decision." },
+      { status: 500 }
     );
   }
-
-  const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-  const upd = await db
-    .from("reviews")
-    .update({
-      status: decision,
-      decision_comment: comment,
-      decided_by: actor,
-      decided_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single();
-  if (upd.error) {
-    return NextResponse.json({ error: upd.error.message }, { status: 500 });
-  }
-
-  await db.from("audit_log").insert({ review_id: id, action: decision, actor, comment });
-  return NextResponse.json(upd.data);
 }
