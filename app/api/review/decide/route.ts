@@ -7,6 +7,7 @@ const ALLOWED = ["approved", "changes_requested", "escalated"];
 
 export async function POST(req: Request) {
   try {
+    // Authenticate reviewer or admin.
     const user = await getUser(req);
 
     if (!user || !["reviewer", "admin"].includes(user.role)) {
@@ -16,9 +17,10 @@ export async function POST(req: Request) {
       );
     }
 
+    // Validate request body.
     const body = await req.json();
-    const id = String(body.id || "");
-    const decision = String(body.decision || "");
+    const id = String(body.id || "").trim();
+    const decision = String(body.decision || "").trim();
     const comment = String(body.comment || "").trim();
 
     if (!id || !ALLOWED.includes(decision)) {
@@ -37,6 +39,7 @@ export async function POST(req: Request) {
 
     const db = adminClient();
 
+    // Fetch the submission.
     const { data: review, error: reviewError } = await db
       .from("reviews")
       .select("id, created_by, status")
@@ -50,17 +53,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // created_by stores the creator's email, not their UUID.
-    if (
-      review.created_by &&
-      review.created_by.toLowerCase() === user.email.toLowerCase()
-    ) {
+    // Prevent reviewers and admins from reviewing their own submissions.
+    // The created_by column stores the creator's email.
+    const creatorEmail = String(review.created_by || "")
+      .trim()
+      .toLowerCase();
+
+    const reviewerEmail = String(user.email || "")
+      .trim()
+      .toLowerCase();
+
+    if (creatorEmail && reviewerEmail && creatorEmail === reviewerEmail) {
       return NextResponse.json(
-        { error: "You cannot review or approve your own submission." },
+        {
+          error: "You cannot review or approve your own submission.",
+        },
         { status: 403 }
       );
     }
 
+    // Prevent decisions on already processed submissions.
     if (
       review.status === "approved" ||
       review.status === "changes_requested" ||
@@ -74,6 +86,7 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString();
 
+    // Update only if the status has not changed since it was fetched.
     const { data: updated, error: updateError } = await db
       .from("reviews")
       .update({
@@ -89,11 +102,14 @@ export async function POST(req: Request) {
 
     if (updateError || !updated) {
       return NextResponse.json(
-        { error: "Unable to update review. It may have changed already." },
+        {
+          error: "Unable to update review. It may have changed already.",
+        },
         { status: 409 }
       );
     }
 
+    // Record the decision in the audit log.
     try {
       await writeAudit({
         reviewId: id,

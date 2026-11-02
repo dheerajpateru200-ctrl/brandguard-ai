@@ -38,12 +38,34 @@ const CHIP: Record<string, string> = {
   low: "bg-[#E6F0FA] text-[#164A82]",
 };
 
-function getToken() {
+function getSession() {
   try {
-    return JSON.parse(localStorage.getItem("bg_session") || "{}").token || "";
+    return JSON.parse(localStorage.getItem("bg_session") || "{}");
   } catch {
-    return "";
+    return {};
   }
+}
+
+function getToken() {
+  const session = getSession();
+  return session.token || session.access_token || session.accessToken || "";
+}
+
+function getCurrentEmail() {
+  const session = getSession();
+  return String(session.email || "").trim().toLowerCase();
+}
+
+function isOwnSubmission(item: Item, currentEmail: string) {
+  const creatorEmail = String(item.created_by || "")
+    .trim()
+    .toLowerCase();
+
+  return Boolean(
+    creatorEmail &&
+    currentEmail &&
+    creatorEmail === currentEmail
+  );
 }
 
 function waited(iso: string, now: number) {
@@ -82,6 +104,7 @@ export default function Queue() {
   const [comment, setComment] = useState("");
   const [now, setNow] = useState(0);
   const [selectedFinding, setSelectedFinding] = useState<number | null>(null);
+  const [currentEmail, setCurrentEmail] = useState("");
 
   const load = useCallback(async () => {
     const t = getToken();
@@ -95,6 +118,7 @@ export default function Queue() {
     try {
       const res = await fetch("/api/queue", {
         headers: { Authorization: "Bearer " + t },
+        cache: "no-store",
       });
 
       const d = await res.json();
@@ -104,7 +128,7 @@ export default function Queue() {
         setItems([]);
       } else {
         setError("");
-        setItems(d.reviews);
+        setItems(Array.isArray(d.reviews) ? d.reviews : []);
       }
     } catch {
       setError("Could not load the queue.");
@@ -115,37 +139,59 @@ export default function Queue() {
   }, []);
 
   useEffect(() => {
+    setCurrentEmail(getCurrentEmail());
+
     load();
+
     const id = setInterval(load, 15000);
+
     return () => clearInterval(id);
   }, [load]);
 
   async function decide(item: Item, decision: string) {
-    setError("");
-    setNotice("");
-
-    const res = await fetch("/api/review/decide", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + getToken(),
-      },
-      body: JSON.stringify({ id: item.id, decision, comment }),
-    });
-
-    const d = await res.json();
-
-    if (!res.ok) {
-      setError(d.error || "Could not save the decision.");
-      if (res.status === 409) load();
+    if (isOwnSubmission(item, currentEmail)) {
+      setError("You cannot review or approve your own submission.");
       return;
     }
 
-    setNotice("Decision saved for " + item.title + ".");
-    setOpen(null);
-    setComment("");
-    setSelectedFinding(null);
-    load();
+    setError("");
+    setNotice("");
+
+    try {
+      const res = await fetch("/api/review/decide", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + getToken(),
+        },
+        body: JSON.stringify({
+          id: item.id,
+          decision,
+          comment,
+        }),
+      });
+
+      const d = await res.json();
+
+      if (!res.ok) {
+        setError(d.error || "Could not save the decision.");
+
+        if (res.status === 409) {
+          load();
+        }
+
+        return;
+      }
+
+      setNotice("Decision saved for " + item.title + ".");
+      setOpen(null);
+      setComment("");
+      setSelectedFinding(null);
+
+      load();
+    } catch {
+      setError("Unable to contact the review server.");
+    }
   }
 
   return (
@@ -178,6 +224,7 @@ export default function Queue() {
         <h1 className="font-doc text-3xl font-semibold tracking-tight">
           Review queue
         </h1>
+
         <p className="mt-1 text-[#566372]">
           Waiting for a decision, oldest first. The list refreshes every 15
           seconds.
@@ -189,6 +236,7 @@ export default function Queue() {
               {error}
             </p>
           )}
+
           {notice && (
             <p className="mb-3 rounded-md border border-[#B5DBC4] bg-[#DDF0E5] p-3 text-sm text-[#17553A]">
               {notice}
@@ -196,13 +244,16 @@ export default function Queue() {
           )}
         </div>
 
-        {loading && <p className="text-sm text-[#566372]">Loading...</p>}
+        {loading && (
+          <p className="text-sm text-[#566372]">Loading...</p>
+        )}
 
         {!loading && !error && items.length === 0 && (
           <div className="rounded-lg border border-[#D5DBE2] bg-white p-5">
             <h2 className="font-doc text-xl font-semibold">
               The queue is empty
             </h2>
+
             <p className="mt-1 text-sm text-[#566372]">
               New submissions appear here as soon as a creator runs a review.
             </p>
@@ -212,6 +263,7 @@ export default function Queue() {
         <ol className="space-y-3">
           {items.map((it, n) => {
             const isOpen = open === it.id;
+            const ownSubmission = isOwnSubmission(it, currentEmail);
 
             return (
               <li
@@ -235,12 +287,19 @@ export default function Queue() {
                     <span className="block truncate font-semibold">
                       {it.title}
                     </span>
+
                     <span className="block text-sm text-[#566372]">
                       From {it.created_by || "unknown"},{" "}
                       {waited(it.created_at, now)}, {it.findings.length}{" "}
                       {it.findings.length === 1 ? "finding" : "findings"}
                       {it.image_url ? ", with poster" : ""}
                     </span>
+
+                    {ownSubmission && (
+                      <span className="mt-1 inline-block text-xs font-semibold text-[#A33B24]">
+                        Your submission — self-review disabled
+                      </span>
+                    )}
                   </span>
 
                   <span className="text-sm font-medium">
@@ -348,10 +407,13 @@ export default function Queue() {
                           <p className="font-doc mt-1 text-base">
                             &ldquo;{f.quote}&rdquo;
                           </p>
+
                           <p className="mt-1">{f.reason}</p>
+
                           <p className="mt-1 text-[#566372]">
                             Evidence: {f.source}
                           </p>
+
                           <p className="mt-1">
                             Suggested fix: {f.suggested_fix}
                           </p>
@@ -359,43 +421,58 @@ export default function Queue() {
                       ))}
                     </div>
 
-                    <label
-                      htmlFor={"c-" + it.id}
-                      className="mt-4 block text-sm font-medium"
-                    >
-                      Comment
-                    </label>
+                    {ownSubmission ? (
+                      <div className="mt-5 rounded-md border border-[#F1B5AE] bg-[#FDECEA] p-4 text-sm text-[#8A1C13]">
+                        <p className="font-semibold">
+                          You cannot review your own submission.
+                        </p>
 
-                    <input
-                      id={"c-" + it.id}
-                      className="mt-1 w-full rounded-md border border-[#D5DBE2] p-2 text-sm"
-                      placeholder="Required to request changes or escalate"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                    />
+                        <p className="mt-1">
+                          Another reviewer or administrator must review this
+                          poster.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <label
+                          htmlFor={"c-" + it.id}
+                          className="mt-4 block text-sm font-medium"
+                        >
+                          Comment
+                        </label>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => decide(it, "approved")}
-                        className="rounded-md bg-[#1F6B45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#185637]"
-                      >
-                        Approve
-                      </button>
+                        <input
+                          id={"c-" + it.id}
+                          className="mt-1 w-full rounded-md border border-[#D5DBE2] p-2 text-sm"
+                          placeholder="Required to request changes or escalate"
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                        />
 
-                      <button
-                        onClick={() => decide(it, "changes_requested")}
-                        className="rounded-md border border-[#1B3A57] px-4 py-2 text-sm font-semibold text-[#1B3A57] hover:bg-[#EEF1F4]"
-                      >
-                        Request changes
-                      </button>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => decide(it, "approved")}
+                            className="rounded-md bg-[#1F6B45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#185637]"
+                          >
+                            Approve
+                          </button>
 
-                      <button
-                        onClick={() => decide(it, "escalated")}
-                        className="rounded-md border border-[#D5DBE2] px-4 py-2 text-sm font-semibold hover:bg-[#EEF1F4]"
-                      >
-                        Escalate
-                      </button>
-                    </div>
+                          <button
+                            onClick={() => decide(it, "changes_requested")}
+                            className="rounded-md border border-[#1B3A57] px-4 py-2 text-sm font-semibold text-[#1B3A57] hover:bg-[#EEF1F4]"
+                          >
+                            Request changes
+                          </button>
+
+                          <button
+                            onClick={() => decide(it, "escalated")}
+                            className="rounded-md border border-[#D5DBE2] px-4 py-2 text-sm font-semibold hover:bg-[#EEF1F4]"
+                          >
+                            Escalate
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </li>

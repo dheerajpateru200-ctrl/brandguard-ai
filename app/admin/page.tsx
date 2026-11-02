@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -331,8 +330,7 @@ export default function AdminPage() {
       </main>
     );
   }
-
-  return (
+    return (
     <main className="min-h-screen bg-[#F5F6F7] text-[#172230]">
       <header className="border-b border-[#D5DBE2] bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-6">
@@ -387,7 +385,7 @@ export default function AdminPage() {
         </div>
 
         {/* Admin navigation */}
-        <section className="mb-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <section className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/reviewer-requests"
             className="rounded-xl border border-[#D5DBE2] bg-white p-5 transition hover:border-[#1B3A57] hover:shadow-sm"
@@ -447,6 +445,22 @@ export default function AdminPage() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-[#566372]">
               Inspect administrative changes and reviewer decisions.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/insights"
+            className="rounded-xl border border-[#D5DBE2] bg-white p-5 transition hover:border-[#1B3A57] hover:shadow-sm"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+              Analytics & reporting
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1B3A57]">
+              Insights Dashboard →
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#566372]">
+              Explore submission trends, review decisions, AI findings, and
+              reviewer activity.
             </p>
           </Link>
         </section>
@@ -513,8 +527,7 @@ export default function AdminPage() {
               </button>
             )}
           </div>
-
-          <form onSubmit={saveTerm} className="grid gap-4 md:grid-cols-2">
+                    <form onSubmit={saveTerm} className="grid gap-4 md:grid-cols-2">
             <div>
               <label htmlFor="term" className="text-sm font-medium">
                 Banned term *
