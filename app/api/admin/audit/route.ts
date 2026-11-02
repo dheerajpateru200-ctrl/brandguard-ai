@@ -1,8 +1,14 @@
+
 import { NextResponse } from "next/server";
-import { getUser, requireAdmin, adminClient } from "../../../../lib/auth";
+import {
+  getUser,
+  requireAdmin,
+  adminClient,
+} from "../../../../lib/auth";
 
 export async function GET(req: Request) {
   try {
+    // Authenticate the request.
     const user = await getUser(req);
 
     if (!user) {
@@ -12,6 +18,7 @@ export async function GET(req: Request) {
       );
     }
 
+    // Allow only administrators.
     if (!requireAdmin(user)) {
       return NextResponse.json(
         { error: "Admin access required" },
@@ -19,16 +26,22 @@ export async function GET(req: Request) {
       );
     }
 
+    // Fetch audit logs.
     const db = adminClient();
 
     const { data, error } = await db
       .from("audit_log")
-      .select("id, review_id, action, actor, comment, created_at")
+      .select(
+        "id, review_id, action, actor, comment, created_at"
+      )
       .order("created_at", { ascending: false })
       .limit(200);
 
     if (error) {
-      console.error("Audit log fetch failed:", error.message);
+      console.error(
+        "Audit log fetch failed:",
+        error.message
+      );
 
       return NextResponse.json(
         { error: "Unable to fetch audit logs" },
@@ -36,7 +49,14 @@ export async function GET(req: Request) {
       );
     }
 
-    return NextResponse.json({ logs: data ?? [] });
+    return NextResponse.json(
+      { logs: data ?? [] },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      }
+    );
   } catch (error) {
     console.error("Audit API error:", error);
 
